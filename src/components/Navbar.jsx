@@ -16,6 +16,7 @@ export default function Navbar() {
   };
 
   const isGestor = user.tipo === 'gestor_caixa';
+  const isCliente = user.tipo === 'cliente';
 
   return (
     <nav
@@ -40,7 +41,7 @@ export default function Navbar() {
       >
         {/* Brand Logo */}
         <Link
-          to={isGestor ? '/gestor' : '/atendente'}
+          to={isGestor ? '/gestor' : isCliente ? '/cliente' : '/atendente'}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -111,6 +112,18 @@ export default function Navbar() {
                 Estoque
               </Link>
             </>
+          ) : isCliente ? (
+            <Link
+              to="/cliente"
+              className="btn-secondary"
+              style={{
+                background: location.pathname === '/cliente' ? 'rgba(249, 115, 22, 0.15)' : undefined,
+                borderColor: location.pathname === '/cliente' ? 'var(--primary)' : undefined,
+              }}
+            >
+              <ShoppingBag size={16} />
+              Meus Pedidos & Avaliações
+            </Link>
           ) : (
             <Link
               to="/atendente"
@@ -128,10 +141,10 @@ export default function Navbar() {
 
         {/* User Info & Logout */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ textAlign: 'right', display: 'none', smDisplay: 'block' }}>
+          <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.9rem', fontWeight: '700' }}>{user.nome}</div>
-            <span className={`badge ${isGestor ? 'badge-gestor' : 'badge-atendente'}`}>
-              {isGestor ? 'Gestor de Caixa' : 'Atendente'}
+            <span className={`badge ${isGestor ? 'badge-gestor' : isCliente ? 'badge-atendente' : 'badge-atendente'}`}>
+              {isGestor ? 'Gestor de Caixa' : isCliente ? 'Cliente' : 'Atendente'}
             </span>
           </div>
 

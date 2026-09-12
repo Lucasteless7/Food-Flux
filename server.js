@@ -18,6 +18,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+app.use(express.static('public'));
 
 // Log de requisições recebidas
 app.use((req, res, next) => {
@@ -58,7 +59,7 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'As senhas informadas não coincidem.' });
     }
 
-    if (!['atendente', 'gestor_caixa'].includes(tipo)) {
+    if (!['atendente', 'gestor_caixa', 'cliente'].includes(tipo)) {
       return res.status(400).json({ error: 'Tipo de usuário inválido.' });
     }
 
@@ -133,8 +134,9 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     if (tipo && user.tipo !== tipo) {
+      const roleName = user.tipo === 'gestor_caixa' ? 'Gestor de Caixa' : user.tipo === 'cliente' ? 'Cliente' : 'Atendente';
       return res.status(403).json({ 
-        error: `Este e-mail está cadastrado como ${user.tipo === 'gestor_caixa' ? 'Gestor de Caixa' : 'Atendente'}. Por favor, selecione o perfil correto.` 
+        error: `Este e-mail está cadastrado como ${roleName}. Por favor, selecione o perfil correto.` 
       });
     }
 
@@ -306,7 +308,7 @@ app.get('/api/dashboard/atendente', async (req, res) => {
     const userId = req.headers['x-user-id'];
 
     const pratos = await sql`
-      SELECT p.id, p.nome, p.descricao, p.valor,
+      SELECT p.id, p.nome, p.descricao, p.valor, p.imagem_url,
              COALESCE(
                json_agg(
                  json_build_object(
@@ -320,7 +322,7 @@ app.get('/api/dashboard/atendente', async (req, res) => {
       LEFT JOIN prato_ingredientes pi ON p.id = pi.prato_id
       LEFT JOIN ingredientes i ON pi.ingrediente_id = i.id
       WHERE p.ativo = true
-      GROUP BY p.id, p.nome, p.descricao, p.valor
+      GROUP BY p.id, p.nome, p.descricao, p.valor, p.imagem_url
       ORDER BY p.nome;
     `;
 
@@ -358,7 +360,7 @@ app.get('/api/dashboard/atendente', async (req, res) => {
 app.post('/api/vendas', async (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
-    const { usuario_id, forma_pagamento, itens } = req.body;
+    const { usuario_id, forma_pagamento, itens, cliente_email } = req.body;
 
     const actualUserId = userId || usuario_id;
     if (!actualUserId) {
@@ -373,14 +375,24 @@ app.post('/api/vendas', async (req, res) => {
       return res.status(400).json({ error: 'Forma de pagamento inválida.' });
     }
 
+    let cleanClientEmail = null;
+    let clienteId = null;
+    if (cliente_email && cliente_email.trim()) {
+      cleanClientEmail = cliente_email.trim().toLowerCase();
+      const clientCheck = await sql`SELECT id FROM usuarios WHERE LOWER(email) = ${cleanClientEmail}`;
+      if (clientCheck.length > 0) {
+        clienteId = clientCheck[0].id;
+      }
+    }
+
     let valorTotalVenda = 0;
     for (const item of itens) {
       valorTotalVenda += (item.quantidade * item.valor_unitario);
     }
 
     const resultVenda = await sql`
-      INSERT INTO vendas (usuario_id, valor_total, forma_pagamento, status)
-      VALUES (${actualUserId}, ${valorTotalVenda}, ${forma_pagamento}, 'concluida')
+      INSERT INTO vendas (usuario_id, cliente_id, cliente_email, valor_total, forma_pagamento, status)
+      VALUES (${actualUserId}, ${clienteId}, ${cleanClientEmail}, ${valorTotalVenda}, ${forma_pagamento}, 'concluida')
       RETURNING id, valor_total, created_at;
     `;
 
@@ -408,6 +420,157 @@ app.post('/api/vendas', async (req, res) => {
   }
 });
 
+// --- ROTAS EXCLUSIVAS DO CLIENTE ---
+
+// Buscar Histórico de Pedidos do Cliente
+app.get('/api/cliente/pedidos', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'];
+    if (!userId) {
+      return res.status(401).json({ error: 'Não autenticado.' });
+    }
+
+    const userCheck = await sql`SELECT id, nome, email FROM usuarios WHERE id = ${userId}`;
+    if (userCheck.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    const user = userCheck[0];
+    const userEmail = user.email.toLowerCase();
+
+    // Buscar vendas onde o cliente é dono (por cliente_id ou cliente_email)
+    const vendas = await sql`
+      SELECT v.id, v.valor_total, v.forma_pagamento, v.status, v.created_at, u.nome AS atendente_nome
+      FROM vendas v
+      LEFT JOIN usuarios u ON v.usuario_id = u.id
+      WHERE v.cliente_id = ${userId} OR LOWER(v.cliente_email) = ${userEmail}
+      ORDER BY v.created_at DESC;
+    `;
+
+    if (vendas.length === 0) {
+      return res.json({ pedidos: [] });
+    }
+
+    const vendaIds = vendas.map(v => v.id);
+
+    // Buscar todos os itens dessas vendas
+    const itens = await sql`
+      SELECT iv.venda_id, iv.prato_id, iv.quantidade, iv.valor_unitario, iv.valor_total, p.nome AS prato_nome, p.descricao, p.imagem_url
+      FROM itens_venda iv
+      JOIN pratos p ON iv.prato_id = p.id
+      WHERE iv.venda_id = ANY(${vendaIds});
+    `;
+
+    // Buscar todas as avaliações feitas por este cliente
+    const avaliacoes = await sql`
+      SELECT id, prato_id, venda_id, nota, comentario, created_at
+      FROM avaliacoes
+      WHERE LOWER(email_cliente) = ${userEmail};
+    `;
+
+    const avaliacoesMap = {};
+    avaliacoes.forEach(a => {
+      // Chave por venda_id + prato_id se existir venda_id, senão por prato_id
+      const key = a.venda_id ? `${a.venda_id}_${a.prato_id}` : a.prato_id;
+      avaliacoesMap[key] = a;
+      avaliacoesMap[a.prato_id] = a;
+    });
+
+    const pedidosFormatados = vendas.map(v => {
+      const pratosDoPedido = itens
+        .filter(i => i.venda_id === v.id)
+        .map(i => {
+          const av = avaliacoesMap[`${v.id}_${i.prato_id}`] || avaliacoesMap[i.prato_id] || null;
+          return {
+            ...i,
+            avaliacao: av ? { id: av.id, nota: av.nota, comentario: av.comentario } : null
+          };
+        });
+
+      return {
+        ...v,
+        itens: pratosDoPedido
+      };
+    });
+
+    return res.json({ pedidos: pedidosFormatados });
+
+  } catch (err) {
+    console.error('[CLIENTE PEDIDOS ERROR]:', err);
+    return res.status(500).json({ error: 'Erro ao carregar histórico de pedidos: ' + err.message });
+  }
+});
+
+// Registrar Avaliação de 1 a 5 estrelas em um Prato pelo Cliente
+app.post('/api/cliente/avaliar', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'];
+    const { prato_id, venda_id, nota, comentario } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Não autenticado.' });
+    }
+
+    if (!prato_id || !nota) {
+      return res.status(400).json({ error: 'O prato e a nota são obrigatórios.' });
+    }
+
+    const notaNum = parseInt(nota);
+    if (isNaN(notaNum) || notaNum < 1 || notaNum > 5) {
+      return res.status(400).json({ error: 'A nota deve ser um valor de 1 a 5 estrelas.' });
+    }
+
+    const userCheck = await sql`SELECT nome, email FROM usuarios WHERE id = ${userId}`;
+    if (userCheck.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    const user = userCheck[0];
+    const cleanEmail = user.email.toLowerCase();
+
+    // Verificar se já existe uma avaliação desse cliente para esse prato (e venda)
+    let existing;
+    if (venda_id) {
+      existing = await sql`
+        SELECT id FROM avaliacoes 
+        WHERE LOWER(email_cliente) = ${cleanEmail} AND prato_id = ${prato_id} AND venda_id = ${venda_id}
+      `;
+    } else {
+      existing = await sql`
+        SELECT id FROM avaliacoes 
+        WHERE LOWER(email_cliente) = ${cleanEmail} AND prato_id = ${prato_id}
+      `;
+    }
+
+    let result;
+    if (existing.length > 0) {
+      // Atualizar avaliação existente
+      result = await sql`
+        UPDATE avaliacoes
+        SET nota = ${notaNum}, comentario = ${comentario || null}, created_at = NOW()
+        WHERE id = ${existing[0].id}
+        RETURNING id, prato_id, nota, comentario, created_at;
+      `;
+    } else {
+      // Inserir nova avaliação
+      result = await sql`
+        INSERT INTO avaliacoes (nome_cliente, email_cliente, prato_id, venda_id, nota, comentario)
+        VALUES (${user.nome}, ${cleanEmail}, ${prato_id}, ${venda_id || null}, ${notaNum}, ${comentario || null})
+        RETURNING id, prato_id, nota, comentario, created_at;
+      `;
+    }
+
+    return res.status(201).json({
+      message: 'Avaliação enviada com sucesso! Obrigado pela sua opinião. ⭐',
+      avaliacao: result[0]
+    });
+
+  } catch (err) {
+    console.error('[CLIENTE AVALIAR ERROR]:', err);
+    return res.status(500).json({ error: 'Erro ao enviar avaliação: ' + err.message });
+  }
+});
+
 // --- ROTAS GERAIS ---
 
 app.get('/api/pratos', async (req, res) => {
@@ -421,16 +584,42 @@ app.get('/api/pratos', async (req, res) => {
 
 app.post('/api/pratos', async (req, res) => {
   try {
-    const { nome, descricao, valor } = req.body;
+    const { nome, descricao, valor, imagem_url } = req.body;
     if (!nome) return res.status(400).json({ error: 'Nome do prato é obrigatório.' });
 
     const result = await sql`
-      INSERT INTO pratos (nome, descricao, valor)
-      VALUES (${nome.trim()}, ${descricao || null}, ${valor || 0})
+      INSERT INTO pratos (nome, descricao, valor, imagem_url)
+      VALUES (${nome.trim()}, ${descricao || null}, ${valor || 0}, ${imagem_url || null})
       RETURNING *;
     `;
 
     return res.status(201).json({ prato: result[0], message: 'Prato criado com sucesso.' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/pratos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nome, descricao, valor, imagem_url } = req.body;
+
+    const result = await sql`
+      UPDATE pratos
+      SET nome = COALESCE(${nome}, nome),
+          descricao = COALESCE(${descricao}, descricao),
+          valor = COALESCE(${valor}, valor),
+          imagem_url = ${imagem_url !== undefined ? imagem_url : null},
+          updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING *;
+    `;
+
+    if (result.length === 0) {
+      return res.status(404).json({ error: 'Prato não encontrado.' });
+    }
+
+    return res.json({ prato: result[0], message: 'Prato atualizado com sucesso.' });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

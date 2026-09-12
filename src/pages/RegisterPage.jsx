@@ -121,13 +121,13 @@ export default function RegisterPage() {
           {/* Seletor de Tipo de Usuário */}
           <div className="input-group">
             <label className="input-label">Perfil de Usuário</label>
-            <div className="role-selector">
+            <div className="role-selector" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
               <button
                 type="button"
                 className={`role-pill ${tipo === 'atendente' ? 'active' : ''}`}
                 onClick={() => setTipo('atendente')}
               >
-                <UserCheck size={16} />
+                <UserCheck size={15} />
                 Atendente
               </button>
               <button
@@ -135,8 +135,16 @@ export default function RegisterPage() {
                 className={`role-pill ${tipo === 'gestor_caixa' ? 'active' : ''}`}
                 onClick={() => setTipo('gestor_caixa')}
               >
-                <ShieldCheck size={16} />
-                Gestor de Caixa
+                <ShieldCheck size={15} />
+                Gestor
+              </button>
+              <button
+                type="button"
+                className={`role-pill ${tipo === 'cliente' ? 'active' : ''}`}
+                onClick={() => setTipo('cliente')}
+              >
+                <User size={15} />
+                Cliente
               </button>
             </div>
           </div>

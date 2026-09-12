@@ -34,7 +34,13 @@ export async function request(endpoint, options = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(data.error || `Erro de comunicação com o servidor (${response.status}).`);
+    if (data && data.error) {
+      throw new Error(data.error);
+    }
+    if (response.status === 404 || response.status === 500 || response.status === 502 || response.status === 504) {
+      throw new Error(`Erro de comunicação com o servidor (${response.status}). Verifique se o servidor backend (npm run dev) está rodando na porta 3001.`);
+    }
+    throw new Error(`Erro de comunicação com o servidor (${response.status}).`);
   }
 
   return data;
@@ -58,8 +64,14 @@ export const salesApi = {
 export const pratosApi = {
   getPratos: () => request('/pratos'),
   createPrato: (data) => request('/pratos', { method: 'POST', body: JSON.stringify(data) }),
+  updatePrato: (id, data) => request(`/pratos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 };
 
 export const ingredientesApi = {
   getIngredientes: () => request('/ingredientes'),
+};
+
+export const clienteApi = {
+  getMeusPedidos: () => request('/cliente/pedidos'),
+  avaliarPrato: (data) => request('/cliente/avaliar', { method: 'POST', body: JSON.stringify(data) }),
 };

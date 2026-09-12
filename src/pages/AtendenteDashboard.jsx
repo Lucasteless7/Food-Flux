@@ -9,6 +9,7 @@ export default function AtendenteDashboard() {
   const [minhasVendas, setMinhasVendas] = useState([]);
   const [carrinho, setCarrinho] = useState([]);
   const [formaPagamento, setFormaPagamento] = useState('pix');
+  const [clienteEmail, setClienteEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -165,6 +166,7 @@ export default function AtendenteDashboard() {
       setSubmitting(true);
       const res = await salesApi.createSale({
         forma_pagamento: formaPagamento,
+        cliente_email: clienteEmail,
         itens: carrinho.map((i) => ({
           prato_id: i.prato_id,
           quantidade: i.quantidade,
@@ -174,6 +176,7 @@ export default function AtendenteDashboard() {
 
       setNotification({ message: res.message || 'Venda registrada com sucesso! Estoque atualizado.', type: 'success' });
       setCarrinho([]);
+      setClienteEmail('');
       carregarDados();
     } catch (err) {
       setNotification({ message: err.message || 'Erro ao registrar venda.', type: 'error' });
@@ -238,6 +241,14 @@ export default function AtendenteDashboard() {
                   return (
                     <div key={grupo.baseNome} className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1px solid rgba(249, 115, 22, 0.3)' }}>
                       <div>
+                        {varianteAtual.imagem_url && (
+                          <img
+                            src={varianteAtual.imagem_url}
+                            alt={grupo.baseNome}
+                            style={{ width: '100%', height: '130px', objectFit: 'cover', borderRadius: '10px', marginBottom: '12px' }}
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        )}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
                           <h3 style={{ fontSize: '1.1rem', fontWeight: '800' }}>{grupo.baseNome}</h3>
                           <span style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-heading)' }}>
@@ -318,6 +329,14 @@ export default function AtendenteDashboard() {
                 {individuais.map((prato) => (
                   <div key={prato.id} className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                     <div>
+                      {prato.imagem_url && (
+                        <img
+                          src={prato.imagem_url}
+                          alt={prato.nome}
+                          style={{ width: '100%', height: '130px', objectFit: 'cover', borderRadius: '10px', marginBottom: '12px' }}
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      )}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                         <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>{prato.nome}</h3>
                         <span style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-heading)' }}>
@@ -476,6 +495,21 @@ export default function AtendenteDashboard() {
                           </div>
                         );
                       })}
+                    </div>
+
+                    {/* E-mail do Cliente (Opcional) */}
+                    <div className="input-group">
+                      <label className="input-label" htmlFor="clienteEmailInput">
+                        E-mail do Cliente (Opcional - Histórico & Avaliação)
+                      </label>
+                      <input
+                        id="clienteEmailInput"
+                        type="email"
+                        className="input-field"
+                        placeholder="cliente@email.com"
+                        value={clienteEmail}
+                        onChange={(e) => setClienteEmail(e.target.value)}
+                      />
                     </div>
 
                     {/* Forma de Pagamento */}

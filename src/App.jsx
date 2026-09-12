@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import AtendenteDashboard from './pages/AtendenteDashboard';
 import GestorDashboard from './pages/GestorDashboard';
+import ClienteDashboard from './pages/ClienteDashboard';
 import PratosPage from './pages/PratosPage';
 import IngredientesPage from './pages/IngredientesPage';
 
@@ -17,6 +18,16 @@ export default function App() {
         {/* Rotas Públicas */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/cadastro" element={<RegisterPage />} />
+
+        {/* Rota Protegida do Cliente */}
+        <Route
+          path="/cliente"
+          element={
+            <ProtectedRoute allowedRoles={['cliente']}>
+              <ClienteDashboard />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Rotas Protegidas do Atendente */}
         <Route

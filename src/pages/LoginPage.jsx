@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Notification from '../components/Notification';
-import { UtensilsCrossed, Lock, Mail, UserCheck, ShieldCheck, ArrowRight } from 'lucide-react';
+import { UtensilsCrossed, Lock, Mail, UserCheck, ShieldCheck, ArrowRight, User } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -20,6 +20,8 @@ export default function LoginPage() {
     if (user && user.ativo) {
       if (user.tipo === 'gestor_caixa') {
         navigate('/gestor', { replace: true });
+      } else if (user.tipo === 'cliente') {
+        navigate('/cliente', { replace: true });
       } else {
         navigate('/atendente', { replace: true });
       }
@@ -54,6 +56,8 @@ export default function LoginPage() {
       const loggedUser = res.user;
       if (loggedUser.tipo === 'gestor_caixa') {
         navigate('/gestor');
+      } else if (loggedUser.tipo === 'cliente') {
+        navigate('/cliente');
       } else {
         navigate('/atendente');
       }
@@ -109,13 +113,13 @@ export default function LoginPage() {
           {/* Seletor de Tipo de Perfil */}
           <div className="input-group">
             <label className="input-label">Tipo de Acesso</label>
-            <div className="role-selector">
+            <div className="role-selector" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
               <button
                 type="button"
                 className={`role-pill ${tipo === 'atendente' ? 'active' : ''}`}
                 onClick={() => setTipo('atendente')}
               >
-                <UserCheck size={16} />
+                <UserCheck size={15} />
                 Atendente
               </button>
               <button
@@ -123,8 +127,16 @@ export default function LoginPage() {
                 className={`role-pill ${tipo === 'gestor_caixa' ? 'active' : ''}`}
                 onClick={() => setTipo('gestor_caixa')}
               >
-                <ShieldCheck size={16} />
-                Gestor de Caixa
+                <ShieldCheck size={15} />
+                Gestor
+              </button>
+              <button
+                type="button"
+                className={`role-pill ${tipo === 'cliente' ? 'active' : ''}`}
+                onClick={() => setTipo('cliente')}
+              >
+                <User size={15} />
+                Cliente
               </button>
             </div>
           </div>
